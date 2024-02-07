@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from diffusion import ScalarDiffusionModel_VariancePreserving_LinearSchedule
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda')
 
 transform_list = transforms.Compose([transforms.ToTensor()])
 mnist_train = datasets.MNIST(root='./data', train=True, download=True, transform=transform_list)

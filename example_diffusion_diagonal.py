@@ -7,7 +7,7 @@ import os
 from diffusion import DiagonalDiffusionModel
 from mnist_utils import ConditionalScoreEstimator, UNet, TimeEncoder, PositionEncoder, mnist_train_loader, mnist_test_loader
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('mps')
 
 # --------------------------
 # define parameters

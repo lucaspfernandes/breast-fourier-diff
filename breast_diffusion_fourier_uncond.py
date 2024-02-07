@@ -1,11 +1,9 @@
-# load the mnist dataset and train a diffusion model on it
-
+# load the breast dataset and train a diffusion model on it
 import torch
 import matplotlib.pyplot as plt
 import os
-
 from diffusion import FourierDiffusionModel, UnconditionalScoreEstimator
-from mnist_utils import UNet, TimeEncoder, PositionEncoder, mnist_train_loader, mnist_test_loader
+from breast_utils import UNet, TimeEncoder, PositionEncoder, breast_train_loader 
 
 device = torch.device('cuda')
 
@@ -18,7 +16,8 @@ runTraining=True
 runTesting=False
 runReverseProcess=True
 save_interval = 10
-plot_interval = 5
+plot_interval = 10
+img_shape = 224
 # --------------------------
 
 if __name__ == '__main__':
@@ -52,43 +51,41 @@ if __name__ == '__main__':
         rGrid = torch.sqrt(xGrid**2 + yGrid**2)
         y = torch.exp(-rGrid**2 / (2 * sigma**2))
         y /= y.sum()  # Normalize
-        y = y.to(torch.device('cpu'))
         y = torch.fft.fft2(y)
         y = torch.abs(y)
-        y = y.to(device)
         return y
     
-    fourier_transfer_function_LPF = gaussian_blur_fourier_transfer_function(6.0, 28)
-    fourier_transfer_function_BPF = gaussian_blur_fourier_transfer_function(3.0, 28) - fourier_transfer_function_LPF
-    fourier_transfer_function_HPF = torch.ones(28, 28).to(device) - fourier_transfer_function_BPF - fourier_transfer_function_LPF
+    fourier_transfer_function_LPF = gaussian_blur_fourier_transfer_function(6.0, img_shape)
+    fourier_transfer_function_BPF = gaussian_blur_fourier_transfer_function(3.0, img_shape) - fourier_transfer_function_LPF
+    fourier_transfer_function_HPF = torch.ones(img_shape, img_shape).to(device) - fourier_transfer_function_BPF - fourier_transfer_function_LPF
     
     fourier_transfer_function_LPF = fourier_transfer_function_LPF.unsqueeze(0).unsqueeze(0)
     fourier_transfer_function_BPF = fourier_transfer_function_BPF.unsqueeze(0).unsqueeze(0)
     fourier_transfer_function_HPF = fourier_transfer_function_HPF.unsqueeze(0).unsqueeze(0)
 
     def modulation_transfer_function_func(t):
-        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, 28, 28)
+        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, img_shape, img_shape)
         LPF = fourier_transfer_function_LPF.repeat(t.shape[0], 1, 1, 1) * torch.exp(-5*_t*_t)
         BPF = fourier_transfer_function_BPF.repeat(t.shape[0], 1, 1, 1) * torch.exp(-7*_t*_t)
         HPF = fourier_transfer_function_HPF.repeat(t.shape[0], 1, 1, 1) * torch.exp(-9*_t*_t)
         return LPF + BPF + HPF
 
     def modulation_transfer_function_derivative_func(t):
-        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, 28, 28)
+        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, img_shape, img_shape)
         LPF = fourier_transfer_function_LPF.repeat(t.shape[0], 1, 1, 1) * (-10*_t * torch.exp(-5*_t*_t))
         BPF = fourier_transfer_function_BPF.repeat(t.shape[0], 1, 1, 1) * (-14*_t * torch.exp(-7*_t*_t))
         HPF = fourier_transfer_function_HPF.repeat(t.shape[0], 1, 1, 1) * (-18*_t * torch.exp(-9*_t*_t))
         return LPF + BPF + HPF + 1e-10
 
     def noise_power_spectrum_func(t):
-        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, 28, 28)
+        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, img_shape, img_shape)
         LPF = fourier_transfer_function_LPF.repeat(t.shape[0], 1, 1, 1) * (1.0 - torch.exp(-10*_t*_t))
         BPF = fourier_transfer_function_BPF.repeat(t.shape[0], 1, 1, 1) * (1.0 - torch.exp(-14*_t*_t))
         HPF = fourier_transfer_function_HPF.repeat(t.shape[0], 1, 1, 1) * (1.0 - torch.exp(-18*_t*_t))
         return LPF + BPF + HPF + 1e-10
 
     def noise_power_spectrum_derivative_func(t):
-        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, 28, 28)
+        _t = t.reshape(-1, 1, 1, 1).repeat(1, 1, img_shape, img_shape)
         LPF = fourier_transfer_function_LPF.repeat(t.shape[0], 1, 1, 1) *  (20*_t * torch.exp(-10*_t*_t))
         BPF = fourier_transfer_function_BPF.repeat(t.shape[0], 1, 1, 1) *  (28*_t * torch.exp(-14*_t*_t))
         HPF = fourier_transfer_function_HPF.repeat(t.shape[0], 1, 1, 1) *  (36*_t * torch.exp(-18*_t*_t))
@@ -109,31 +106,38 @@ if __name__ == '__main__':
             diffusion_model.load_state_dict(torch.load('./data/weights/diffusion_fourier_unconditional.pt'))
             print('Loaded weights from ./data/weights/diffusion_fourier_unconditional.pt')
 
-    optimizer = torch.optim.Adam(diffusion_model.parameters(), lr=1e-3)
+#    def optimizer_hook(parameter) -> None:
+#        optimizer_dict[parameter].step()
+#        optimizer_dict[parameter].zero_grad()
+
+    optimizer = torch.optim.Adam(diffusion_model.parameters(), lr=1e-3, foreach=False)
+#    optimizer_dict = {p: torch.optim.Adam([p], foreach=False) for p in diffusion_model.parameters()}
+
+#    for p in diffusion_model.parameters():
+#        p.register_post_accumulate_grad_hook(optimizer_hook)
 
     for epoch in range(1,101):
-
         # run the training loop
         if runTraining:
-            for i, (x_0_batch, _) in enumerate(mnist_train_loader):
+            for i, x_0_batch in enumerate(breast_train_loader):
+                optimizer.zero_grad()
                 x_0_batch = x_0_batch.to(device)
                 loss = diffusion_model.compute_loss(x_0_batch, loss_name='elbo')
-                optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 if verbose:
-                    print(f'Epoch {epoch+1}, iteration {i+1}, loss {loss.item()}')
+                    print(f'Epoch {epoch}, iteration {i+1}, loss {loss.item()}')
 
         # run the test loop
-        if runTesting:
-            for i, (x_0_batch, _) in enumerate(mnist_test_loader):
-                x_0_batch = x_0_batch.to(device)
-                diffusion_model.eval()
-                with torch.no_grad():
-                    loss = diffusion_model.compute_loss(x_0_batch, loss_name='elbo')
-                diffusion_model.train()
-                if verbose:
-                    print(f'Epoch {epoch}, iteration {i}, test loss {loss.item()}')
+#        if runTesting:
+#            for i, (x_0_batch, _) in enumerate(mnist_test_loader):
+#                x_0_batch = x_0_batch.to(device)
+#                diffusion_model.eval()
+#                with torch.no_grad():
+#                    loss = diffusion_model.compute_loss(x_0_batch, loss_name='elbo')
+#                diffusion_model.train()
+#                if verbose:
+#                    print(f'Epoch {epoch}, iteration {i}, test loss {loss.item()}')
         
         if runReverseProcess and (epoch % plot_interval == 0):
 
@@ -146,7 +150,7 @@ if __name__ == '__main__':
 
             # x_T = diffusion_model.sample_x_t_given_x_0_and_t(x_0_batch, t=torch.ones(x_0_batch.shape[0]).to(device))
 
-            x_T = torch.randn((4,1,28,28)).to(device)
+            x_T = torch.randn((4,1,img_shape,img_shape)).to(device)
 
             # run the reverse process loop
             x_t_all = diffusion_model.reverse_process(
@@ -154,7 +158,7 @@ if __name__ == '__main__':
                             t_stop=0.0,
                             num_steps=1024,
                             returnFullProcess=True,
-                            verbose=True
+                            verbose=False
                             )
 
             # plot the results as an animation

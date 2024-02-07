@@ -13,7 +13,7 @@ from mnist_utils import mnist_train_loader, mnist_test_loader
 import torchvision
 import torchvision.transforms as transforms
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('mps')
 print("Using device:", device)
 
 

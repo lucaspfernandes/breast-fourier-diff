@@ -4,10 +4,10 @@ import torch
 import matplotlib.pyplot as plt
 import os
 
-from diffusion import FourierDiffusionModel
-from mnist_utils import UnconditionalScoreEstimator, UNet, TimeEncoder, PositionEncoder, mnist_train_loader, mnist_test_loader
+from diffusion import FourierDiffusionModel, UnconditionalScoreEstimator 
+from mnist_utils import UNet, TimeEncoder, PositionEncoder, mnist_train_loader, mnist_test_loader
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('mps') #macOS gpu
 
 # --------------------------
 # define parameters

@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import os
 from diffusion import FourierDiffusionModel, UnconditionalScoreEstimator
 from breast_utils import UNet, TimeEncoder, PositionEncoder, breast_train_loader 
+from tqdm import tqdm
+import sys
 
 device = torch.device('cuda')
 
@@ -11,11 +13,11 @@ device = torch.device('cuda')
 # define parameters
 # --------------------------
 verbose=True
-loadPreviousWeights=True
+loadPreviousWeights=False
 runTraining=True
 runTesting=False
 runReverseProcess=True
-n_epochs = 250
+n_epochs = 100
 save_interval = 5
 plot_interval = 5
 img_shape = 224
@@ -117,7 +119,7 @@ if __name__ == '__main__':
 #    for p in diffusion_model.parameters():
 #        p.register_post_accumulate_grad_hook(optimizer_hook)
 
-    for epoch in range(1, n_epochs + 1):
+    for epoch in tqdm(range(1, n_epochs+1), desc='Epochs'):
         # run the training loop
         if runTraining:
             for i, x_0_batch in enumerate(breast_train_loader):
@@ -187,3 +189,4 @@ if __name__ == '__main__':
             ani.save(f'./data/animations_train/diffusion_fourier_unconditional_{epoch}.gif')
         if epoch % save_interval == 0:
             torch.save(diffusion_model.state_dict(), f'./data/weights/diffusion_fourier_unconditional_{epoch}.pt')
+        sys.stdout.flush()

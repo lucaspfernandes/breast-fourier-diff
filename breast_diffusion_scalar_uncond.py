@@ -1,10 +1,11 @@
 # load the breast dataset and train a scalar diffusion model on it
-
 import torch
 import matplotlib.pyplot as plt
 import os
 from diffusion import ScalarDiffusionModel_VariancePreserving_LinearSchedule, UnconditionalScoreEstimator
 from breast_utils import UNet, TimeEncoder, PositionEncoder, breast_train_loader 
+from tqdm import tqdm
+import sys
 
 device = torch.device('cuda')
 
@@ -15,7 +16,7 @@ verbose=True
 loadPreviousWeights=False
 runTraining=True
 runTesting=False
-n_epochs = 100
+n_epochs = 120
 runReverseProcess=True
 save_interval = 5
 plot_interval = 2
@@ -59,8 +60,7 @@ if __name__ == '__main__':
 
     optimizer = torch.optim.Adam(diffusion_model.parameters(), lr=1e-3)
 
-    for epoch in range(1,n_epochs+1):
-
+    for epoch in tqdm(range(1, n_epochs+1), desc='Epochs'):
         # run the training loop
         if runTraining:
             for i, x_0_batch in enumerate(breast_train_loader):
@@ -71,6 +71,7 @@ if __name__ == '__main__':
                 optimizer.step()
                 if verbose:
                     print(f'Epoch {epoch}, iteration {i+1}, loss {loss.item()}')
+                sys.stdout.flush()
 
         # run the test loop
 #        if runTesting:
@@ -88,7 +89,8 @@ if __name__ == '__main__':
                             batch_size=4,
                             t_stop=0.0,
                             num_steps=1024,
-                            returnFullProcess=True
+                            returnFullProcess=True,
+                            verbose=False
                             )
 
             # plot the results as an animation
@@ -101,9 +103,9 @@ if __name__ == '__main__':
                 im = ax[i//2, i%2].imshow(x_t_all[0,i, 0, :, :], animated=True)
                 im.set_clim(-1, 1)
                 ims.append([im])
-            
+            print('Animating frames')
             def updatefig(frame):
-                print('Animating frame ', frame)
+                #print('Animating frame ', frame)
                 for i in range(4):
                     if frame < 64:
                         ims[i][0].set_array(x_t_all[frame*16 + 15,i, 0, :, :])
@@ -114,6 +116,7 @@ if __name__ == '__main__':
             ani.save(f'./data/animations_train/diffusion_scalar_unconditional_{epoch}.gif')
         if epoch % save_interval == 0:
             torch.save(diffusion_model.state_dict(), f'./data/weights/diffusion_scalar_unconditional_{epoch}.pt')
+        sys.stdout.flush()
 
 
         

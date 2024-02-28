@@ -15,10 +15,11 @@ verbose=True
 loadPreviousWeights=False
 runTraining=True
 runTesting=False
+n_epochs = 100
 runReverseProcess=True
-save_interval = 10
-plot_interval = 5
-img_shape = 64
+save_interval = 5
+plot_interval = 2
+img_shape = 224
 # --------------------------
 
 if __name__ == '__main__':
@@ -58,7 +59,7 @@ if __name__ == '__main__':
 
     optimizer = torch.optim.Adam(diffusion_model.parameters(), lr=1e-3)
 
-    for epoch in range(1,101):
+    for epoch in range(1,n_epochs+1):
 
         # run the training loop
         if runTraining:

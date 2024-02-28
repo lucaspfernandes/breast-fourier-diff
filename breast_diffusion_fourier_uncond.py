@@ -11,12 +11,13 @@ device = torch.device('cuda')
 # define parameters
 # --------------------------
 verbose=True
-loadPreviousWeights=False
+loadPreviousWeights=True
 runTraining=True
 runTesting=False
 runReverseProcess=True
-save_interval = 10
-plot_interval = 10
+n_epochs = 250
+save_interval = 5
+plot_interval = 5
 img_shape = 224
 # --------------------------
 
@@ -116,12 +117,14 @@ if __name__ == '__main__':
 #    for p in diffusion_model.parameters():
 #        p.register_post_accumulate_grad_hook(optimizer_hook)
 
-    for epoch in range(1,101):
+    for epoch in range(1, n_epochs + 1):
         # run the training loop
         if runTraining:
             for i, x_0_batch in enumerate(breast_train_loader):
                 optimizer.zero_grad()
                 x_0_batch = x_0_batch.to(device)
+ #               import matplotlib.pyplot as plt
+ #               plt.imshow(x_0_batch[4].squeeze(0).cpu().numpy())
                 loss = diffusion_model.compute_loss(x_0_batch, loss_name='elbo')
                 loss.backward()
                 optimizer.step()

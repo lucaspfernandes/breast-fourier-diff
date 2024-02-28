@@ -11,7 +11,31 @@ import numpy as np
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 device = torch.device('cuda')
 img_size = 224
-batch_size = 16
+batch_size = 20
+
+def get_mean_std(loader):
+    # Compute the mean and standard deviation of all pixels in the dataset
+    num_pixels = 0
+    mean = 0.0
+    std = 0.0
+    max_val = -np.inf
+    min_val = np.inf
+    for images in loader:
+#        batch_size, num_channels, height, width = images.shape
+#        num_pixels += batch_size * height * width
+#        mean += images.mean(axis=(0, 2, 3)).sum()
+#        std += images.std(axis=(0, 2, 3)).sum()
+        img_min = images.min()
+        img_max = images.max()
+        if img_max > max_val:
+            max_val = img_max
+        if img_min < min_val:
+            min_val = img_min
+#    mean /= num_pixels
+#    std /= num_pixels
+#    return mean, std
+    return max_val, min_val
+
 
 class BreastDataset(Dataset):
     def __init__(self, root_dir, transform=None) -> None:
@@ -33,17 +57,25 @@ class BreastDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         img = Image.open(self.img_files[idx])
-        img = np.array(Image.open(self.img_files[idx]))/65535.0
-        img = Image.fromarray(img)
+        img = img.convert('F')
         if self.transform:
             img = self.transform(img)
 
-        return img.to(torch.float32)
+        return img
+
+transform_list_norm = transforms.Compose([transforms.ToTensor(), transforms.Resize((img_size, img_size), antialias=None)])
+breast_norm_dataset = BreastDataset(root_dir='../data/MAMA', transform=transform_list_norm)
+breast_norm_loader = DataLoader(breast_norm_dataset, batch_size=32, shuffle=True)
+# breast_mean, breast_std = get_mean_std(breast_norm_loader)
+breast_max, breast_min = get_mean_std(breast_norm_loader)
 
 
-transform_list = transforms.Compose([transforms.ToTensor(), transforms.Resize((img_size, img_size), antialias=None)])
-breast_train = BreastDataset(root_dir='../data/MAMA', transform=transform_list)
-breast_train_loader = DataLoader(breast_train, batch_size=batch_size, shuffle=True, num_workers=1)
+transform_list = transforms.Compose([transforms.ToTensor(), 
+                                    transforms.Resize((img_size, img_size), antialias=None),
+                                    transforms.Normalize(mean=breast_min, std=(breast_max-breast_min)),
+                                    transforms.Normalize(mean=0.5, std=0.5)])
+breast_dataset = BreastDataset(root_dir='../data/MAMA', transform=transform_list)
+breast_train_loader = DataLoader(breast_dataset, batch_size=batch_size, shuffle=True, num_workers=1)
 
 
 class ConvolutionalBlock(torch.nn.Module):
@@ -86,7 +118,7 @@ class UNet(torch.nn.Module):
         self.pool6 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
         self.conv7 = ConvolutionalBlock(num_base_filters*4, num_base_filters*8) #256
         self.pool8 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
-        #bottleneck
+        # bottleneck
         self.conv9 = ConvolutionalBlock(num_base_filters*8, num_base_filters*16) #512
 #        self.flatten6 = torch.nn.Flatten()
 #        self.fc7 = FullyConnectedBlock((self.image_size//4)*(self.image_size//4)*num_base_filters*4, 1024)
